@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key, RefreshCw, Layers, Zap, Sparkles, Menu, X, ArrowUpRight } from 'lucide-react';
+import { Key, RefreshCw, Layers, Zap, Sparkles, Menu, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react';
 
 export default function Header({
   quotas,
@@ -7,7 +7,9 @@ export default function Header({
   onSimulate429,
   onOpenSettings,
   isDemoMode,
-  onToggleDemoMode
+  onToggleDemoMode,
+  showAdvanced = false,
+  onToggleAdvanced
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -28,7 +30,7 @@ export default function Header({
   return (
     <header className="border-b border-white/10 bg-[#0A0A0A]/90 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-        {/* Brand & Monospace Bracketed Tag */}
+        {/* Brand & Monospace Tag */}
         <div className="flex items-center gap-3">
           <a href="#" className="flex items-center gap-2.5 group">
             <div className="w-8 h-8 rounded-full bg-[#00F0FF] p-[1px] flex items-center justify-center glow-neon-cyan-sm">
@@ -63,49 +65,67 @@ export default function Header({
           ))}
         </nav>
 
-        {/* Right Controls: Quotas & Pill CTA Buttons */}
+        {/* Right Controls: Quotas (Advanced only) & Pill Buttons */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Provider Quota Terminal Monitor (Desktop) */}
-          <div className="hidden xl:flex items-center gap-1.5 bg-[#121212] p-1 rounded-full border border-white/10 font-mono">
-            <span className="text-[10px] text-slate-400 px-2 flex items-center gap-1">
-              <Layers className="w-3 h-3 text-[#00F0FF]" /> GATEWAYS:
-            </span>
-            {providerList.map((p) => {
-              const q = quotas?.[p.id];
-              const pct = q?.requests_remaining_pct ?? 100;
-              const isExhausted = q?.is_exhausted;
+          {/* Provider Quota Terminal Monitor (Rendered ONLY if showAdvanced is true) */}
+          {showAdvanced && (
+            <div className="hidden xl:flex items-center gap-1.5 bg-[#121212] p-1 rounded-full border border-white/10 font-mono animate-fadeIn">
+              <span className="text-[10px] text-slate-400 px-2 flex items-center gap-1">
+                <Layers className="w-3 h-3 text-[#00F0FF]" /> QUOTAS:
+              </span>
+              {providerList.map((p) => {
+                const q = quotas?.[p.id];
+                const pct = q?.requests_remaining_pct ?? 100;
+                const isExhausted = q?.is_exhausted;
 
-              return (
-                <div
-                  key={p.id}
-                  title={`${p.name}: ${q?.requests_remaining ?? 0}/${q?.requests_limit ?? 0} remaining`}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border ${
-                    isExhausted
-                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                      : 'bg-[#181818] text-slate-300 border-white/5'
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isExhausted ? 'bg-red-400 animate-ping' : p.color}`} />
-                  <span className="font-semibold">{p.name.slice(0, 4)}</span>
-                  <span className="text-slate-500">{isExhausted ? '429' : `${pct}%`}</span>
-                </div>
-              );
-            })}
+                return (
+                  <div
+                    key={p.id}
+                    title={`${p.name}: ${q?.requests_remaining ?? 0}/${q?.requests_limit ?? 0} remaining`}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border ${
+                      isExhausted
+                        ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                        : 'bg-[#181818] text-slate-300 border-white/5'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${isExhausted ? 'bg-red-400 animate-ping' : p.color}`} />
+                    <span className="font-semibold">{p.name.slice(0, 4)}</span>
+                    <span className="text-slate-500">{isExhausted ? '429' : `${pct}%`}</span>
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => onSimulate429('openrouter')}
+                title="Simulate 429 Rate Limit"
+                className="px-2 py-0.5 text-[10px] font-mono text-amber-400 hover:text-black hover:bg-amber-400 rounded-full border border-amber-500/40 transition"
+              >
+                Sim 429
+              </button>
+              <button
+                onClick={onResetQuotas}
+                title="Reset Quotas"
+                className="p-1 text-slate-400 hover:text-[#00F0FF] rounded-full transition"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Show Advanced Toggle Button */}
+          {onToggleAdvanced && (
             <button
-              onClick={() => onSimulate429('openrouter')}
-              title="Simulate 429 Rate Limit on OpenRouter"
-              className="px-2 py-0.5 text-[10px] font-mono text-amber-400 hover:text-black hover:bg-amber-400 rounded-full border border-amber-500/40 transition"
+              onClick={onToggleAdvanced}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-medium border transition ${
+                showAdvanced
+                  ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/40'
+                  : 'bg-[#141414] text-slate-400 border-white/10 hover:border-white/20'
+              }`}
+              title="Toggle detailed technical breakdown"
             >
-              Sim 429
+              <SlidersHorizontal className="w-3 h-3" />
+              <span className="hidden sm:inline">{showAdvanced ? 'Hide Advanced' : 'Show Advanced'}</span>
             </button>
-            <button
-              onClick={onResetQuotas}
-              title="Reset Quotas"
-              className="p-1 text-slate-400 hover:text-[#00F0FF] rounded-full transition"
-            >
-              <RefreshCw className="w-3 h-3" />
-            </button>
-          </div>
+          )}
 
           {/* Demo Mode Pill */}
           <button
@@ -117,7 +137,7 @@ export default function Header({
             }`}
           >
             <Sparkles className="w-3 h-3 text-purple-400" />
-            <span className="hidden sm:inline">{isDemoMode ? 'Demo Mode' : 'Live API'}</span>
+            <span className="hidden sm:inline">{isDemoMode ? 'Demo' : 'Live'}</span>
           </button>
 
           {/* Pill CTA Button for API Keys */}
@@ -139,7 +159,7 @@ export default function Header({
         </div>
       </div>
 
-      {/* Mobile Numbered Navigation Drawer */}
+      {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-white/10 bg-[#0E0E0E] px-4 py-4 space-y-3 font-mono text-xs">
           {navLinks.map((link) => (
@@ -157,42 +177,18 @@ export default function Header({
             </a>
           ))}
 
-          {/* Mobile Gateways Status */}
-          <div className="pt-2 border-t border-white/10">
-            <div className="text-[10px] text-slate-500 uppercase mb-2">Gateways Status</div>
-            <div className="grid grid-cols-2 gap-2">
-              {providerList.map((p) => {
-                const q = quotas?.[p.id];
-                const pct = q?.requests_remaining_pct ?? 100;
-                const isExhausted = q?.is_exhausted;
-                return (
-                  <div
-                    key={p.id}
-                    className="p-2 rounded bg-[#141414] border border-white/5 flex items-center justify-between"
-                  >
-                    <span className="text-slate-300">{p.name}</span>
-                    <span className={`text-[10px] ${isExhausted ? 'text-red-400' : 'text-[#00F0FF]'}`}>
-                      {isExhausted ? '429' : `${pct}%`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={() => onSimulate429('openrouter')}
-                className="flex-1 py-1 text-center text-[10px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded"
-              >
-                Simulate 429 Failover
-              </button>
-              <button
-                onClick={onResetQuotas}
-                className="py-1 px-3 text-center text-[10px] font-mono text-slate-300 bg-[#1A1A1A] border border-white/10 rounded"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
+          {onToggleAdvanced && (
+            <button
+              onClick={() => {
+                onToggleAdvanced();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full py-2 px-3 rounded-lg bg-[#141414] border border-white/10 text-slate-300 text-left flex items-center justify-between"
+            >
+              <span>{showAdvanced ? 'Hide Advanced Mode' : 'Enable Advanced Mode'}</span>
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#00F0FF]" />
+            </button>
+          )}
         </div>
       )}
     </header>

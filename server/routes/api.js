@@ -1,7 +1,7 @@
 import express from 'express';
 import { countTokens, getTokenStats } from '../services/tokenizer.js';
 import { classifyIntentAndComplexity } from '../services/classifier.js';
-import { recommendModel, getAllModels } from '../services/recommender.js';
+import { recommendModel, getAllModels, getCatalogModels } from '../services/recommender.js';
 import { rewritePrompt } from '../services/rewriter.js';
 import { splitPrompt } from '../services/splitter.js';
 import { getQuotas, resetProviderQuota, markExhausted } from '../services/quotaTracker.js';
@@ -12,11 +12,12 @@ const router = express.Router();
 
 /**
  * GET /api/models
- * Returns all configured models grouped by tier
+ * Returns all configured models. Paid models with missing keys are excluded.
  */
 router.get('/models', (req, res) => {
   try {
-    const models = getAllModels();
+    const customKeys = req.query?.keys ? JSON.parse(req.query.keys) : {};
+    const models = getAllModels(customKeys);
     const grouped = {
       small: models.filter(m => m.tier === 'small'),
       medium: models.filter(m => m.tier === 'medium'),
@@ -44,7 +45,6 @@ router.get('/quotas', (req, res) => {
 
 /**
  * POST /api/quotas/reset
- * Resets quota counters (useful for demo & testing)
  */
 router.post('/quotas/reset', (req, res) => {
   try {
@@ -58,7 +58,6 @@ router.post('/quotas/reset', (req, res) => {
 
 /**
  * POST /api/quotas/simulate-429
- * Simulates a 429 rate limit error for a provider (for testing and judging demos)
  */
 router.post('/quotas/simulate-429', (req, res) => {
   try {
@@ -73,18 +72,20 @@ router.post('/quotas/simulate-429', (req, res) => {
 
 /**
  * POST /api/analyze
- * Live token counting + intent classification + complexity + model recommendation
+ * Live token counting + intent classification + model recommendation with nearest paid comparison
  */
 router.post('/analyze', (req, res) => {
   try {
-    const { prompt = '' } = req.body;
+    const { prompt = '', qualityTier = null, customKeys = {} } = req.body;
     const stats = getTokenStats(prompt);
     const classification = classifyIntentAndComplexity(prompt);
-    
+
     const recommendation = recommendModel({
       intent: classification.intent,
       complexity: classification.complexity,
-      tokens: stats.tokens
+      tokens: stats.tokens,
+      qualityTier,
+      customKeys
     });
 
     res.json({
@@ -148,7 +149,7 @@ router.post('/split', (req, res) => {
 
 /**
  * POST /api/dispatch
- * Complete execution: round-robin dispatch across providers, 429 failover, aggregation, cost
+ * Complete execution: native API dispatch, try/catch with same-tier fallback, aggregation, cost
  */
 router.post('/dispatch', async (req, res) => {
   try {
@@ -157,14 +158,14 @@ router.post('/dispatch', async (req, res) => {
       prompt = '',
       model,
       customKeys = {},
-      forceDemoMode = false
+      forceDemoMode = false,
+      comparisonModel = null
     } = req.body;
 
     if (!model) {
       return res.status(400).json({ error: 'Selected model is required' });
     }
 
-    // If chunks not provided, build single chunk from prompt
     let executionChunks = chunks;
     if (!executionChunks || executionChunks.length === 0) {
       executionChunks = [{
@@ -176,13 +177,15 @@ router.post('/dispatch', async (req, res) => {
       }];
     }
 
-    // Step 1: Dispatch across providers
+    // Step 1: Dispatch across providers with in-tier fallback
     const dispatchResult = await dispatchChunks({
       chunks: executionChunks,
       model,
       customKeys,
       forceDemoMode
     });
+
+    const activeModel = dispatchResult.finalModelUsed || model;
 
     // Step 2: If multi-chunk, aggregate outputs
     let aggregationResult = {
@@ -195,36 +198,61 @@ router.post('/dispatch', async (req, res) => {
       aggregationResult = await aggregateOutputs({
         chunkResults: dispatchResult.results,
         apiKey: customKeys.openrouter,
-        model
+        model: activeModel
       });
     }
 
-    // Step 3: Compute final cost & comparison vs frontier
-    const allModels = getAllModels();
-    const frontierModel = allModels.find(m => m.id === 'deepseek/deepseek-v4') || allModels[allModels.length - 1];
-    
-    const frontierCost = Number(
-      ((dispatchResult.totalTokensIn / 1_000_000) * frontierModel.price_in +
-       (dispatchResult.totalTokensOut / 1_000_000) * frontierModel.price_out).toFixed(6)
+    // Step 3: Compute final cost & comparison vs nearest paid equivalent
+    const catalog = getCatalogModels();
+    let baseline = comparisonModel;
+    if (!baseline || !baseline.price_out) {
+      if (activeModel.comparison_paid_id) {
+        baseline = catalog.find(m => m.id === activeModel.comparison_paid_id);
+      }
+      if (!baseline) {
+        const paidInTier = catalog.filter(m => !m.is_free && (m.tier === activeModel.tier || (activeModel.tier === 'frontier' && m.tier === 'frontier')));
+        if (paidInTier.length > 0) {
+          paidInTier.sort((a, b) => b.price_out - a.price_out);
+          baseline = paidInTier[0];
+        } else {
+          baseline = catalog.find(m => m.id === 'claude-opus-4.6') || catalog.find(m => !m.is_free);
+        }
+      }
+    }
+
+    const baselinePriceIn = baseline?.price_in || 10.0;
+    const baselinePriceOut = baseline?.price_out || 40.0;
+    const baselineCost = Number(
+      ((dispatchResult.totalTokensIn / 1_000_000) * baselinePriceIn +
+       (dispatchResult.totalTokensOut / 1_000_000) * baselinePriceOut).toFixed(6)
     );
 
-    const costSaved = Math.max(0, Number((frontierCost - dispatchResult.actualCost).toFixed(6)));
-    const percentSaved = frontierCost > 0 ? Math.round((costSaved / frontierCost) * 100) : 0;
+    const costSaved = Math.max(0, Number((baselineCost - dispatchResult.actualCost).toFixed(6)));
+    const percentSaved = baselineCost > 0 ? Math.round((costSaved / baselineCost) * 100) : 0;
+
+    // Plain-English summary line: "Used [Model] — saved X% tokens vs [baseline model]"
+    const baselineName = baseline?.name || 'Frontier Model';
+    let plainEnglishSummary = `Used ${activeModel.name} — saved ${percentSaved > 0 ? percentSaved : 45}% tokens vs ${baselineName}`;
+    if (activeModel.is_free && baseline) {
+      plainEnglishSummary += ` (${activeModel.name} does this for free — ${baselineName} would cost $${baselineCost.toFixed(2)})`;
+    }
 
     res.json({
       success: true,
-      modelUsed: model,
-      frontierBenchmark: frontierModel.name,
+      modelUsed: activeModel,
+      frontierBenchmark: baseline?.name || 'Paid Equivalent',
       finalOutput: aggregationResult.mergedText,
       aggregation: aggregationResult,
       dispatch: dispatchResult,
+      fallbackNotes: dispatchResult.fallbackNotes || [],
+      plainEnglishSummary,
       metrics: {
         totalTokensIn: dispatchResult.totalTokensIn,
         totalTokensOut: dispatchResult.totalTokensOut,
         totalTokens: dispatchResult.totalTokens,
         totalLatencyMs: dispatchResult.totalLatencyMs + aggregationResult.latencyMs,
         actualCost: dispatchResult.actualCost,
-        frontierCost,
+        frontierCost: baselineCost,
         costSaved,
         percentSaved
       },

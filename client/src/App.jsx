@@ -16,7 +16,7 @@ import SessionHistory from './components/SessionHistory';
 import SettingsModal from './components/SettingsModal';
 import { countTokensClient } from './utils/tokenizer';
 import { SAMPLE_PRESETS } from './mockData';
-import { History, Zap, Shield, Sparkles, Terminal, ArrowUpRight } from 'lucide-react';
+import { History, Zap, Shield, Sparkles, Terminal, ArrowUpRight, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function App() {
   // 1. Core State
@@ -29,13 +29,25 @@ export default function App() {
   const [executionResult, setExecutionResult] = useState(null);
   const [quotas, setQuotas] = useState(null);
 
-  // 2. Options & Toggles
+  // 2. 3-Way Plain Quality Toggle ("Fastest & Cheapest" / "Balanced" / "Best Quality")
+  const [qualityTier, setQualityTier] = useState('medium');
+
+  // 3. Options & Toggles
   const [useOptimized, setUseOptimized] = useState(true);
   const [isSplitEnabled, setIsSplitEnabled] = useState(true);
   const [forceSplitOverride, setForceSplitOverride] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(true);
 
-  // 3. UI Flow & Modals
+  // 4. "Show Advanced" Toggle (persisted via localStorage, hidden by default)
+  const [showAdvanced, setShowAdvanced] = useState(() => {
+    try {
+      return localStorage.getItem('promptly_show_advanced') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // 5. UI Flow & Modals
   const [isLoadingRewrite, setIsLoadingRewrite] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchPhase, setDispatchPhase] = useState('');
@@ -43,7 +55,7 @@ export default function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [sessionHistory, setSessionHistory] = useState([]);
 
-  // 4. API Keys from localStorage
+  // 6. API Keys from localStorage
   const [apiKeys, setApiKeys] = useState(() => {
     try {
       const saved = localStorage.getItem('promptly_api_keys');
@@ -53,7 +65,17 @@ export default function App() {
     }
   });
 
-  // Client-side live token counter (instant on every keystroke)
+  const handleToggleAdvanced = () => {
+    setShowAdvanced((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('promptly_show_advanced', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  // Client-side live token counter
   const tokenStats = useMemo(() => {
     const tokens = countTokensClient(prompt);
     const chars = prompt ? prompt.length : 0;
@@ -63,15 +85,19 @@ export default function App() {
 
   // Load models & initial quotas
   useEffect(() => {
-    fetch('/api/models')
+    fetchModels();
+    fetchQuotas();
+  }, [apiKeys]);
+
+  const fetchModels = () => {
+    const query = Object.keys(apiKeys).length > 0 ? `?keys=${encodeURIComponent(JSON.stringify(apiKeys))}` : '';
+    fetch(`/api/models${query}`)
       .then((res) => res.json())
       .then((data) => {
         setAllModels(data.models || []);
       })
       .catch((err) => console.error('Failed to load models:', err));
-
-    fetchQuotas();
-  }, []);
+  };
 
   const fetchQuotas = async () => {
     try {
@@ -111,7 +137,7 @@ export default function App() {
     }
   };
 
-  // Debounced real-time analysis & prompt rewrite whenever prompt or forceSplitOverride changes
+  // Debounced real-time analysis & prompt rewrite whenever prompt, qualityTier, or forceSplitOverride changes
   useEffect(() => {
     if (!prompt.trim()) {
       setAnalysis(null);
@@ -123,16 +149,15 @@ export default function App() {
 
     const timer = setTimeout(async () => {
       try {
-        // 1. Analyze intent & model recommendation
+        // 1. Analyze intent & model recommendation based on quality tier
         const analyzeRes = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
+          body: JSON.stringify({ prompt, qualityTier, customKeys: apiKeys })
         });
         const analyzeData = await analyzeRes.json();
         setAnalysis(analyzeData);
 
-        // Keep current selected model or auto-select recommended
         const recommended = analyzeData.recommendation?.recommendedModel;
         setSelectedModel(recommended);
 
@@ -171,18 +196,17 @@ export default function App() {
     }, 280);
 
     return () => clearTimeout(timer);
-  }, [prompt, forceSplitOverride, apiKeys]);
+  }, [prompt, qualityTier, forceSplitOverride, apiKeys]);
 
   // Execute Dispatch
   const handleDispatch = async () => {
     if (!prompt.trim() || !selectedModel) return;
 
     setIsDispatching(true);
-    setDispatchPhase('Analyzing payload...');
+    setDispatchPhase('Optimizing prompt...');
 
     try {
       await new Promise((r) => setTimeout(r, 200));
-      setDispatchPhase('Routing chunks across providers...');
 
       const activePrompt =
         useOptimized && rewriteData?.rewrittenPrompt
@@ -210,11 +234,11 @@ export default function App() {
           prompt: activePrompt,
           model: selectedModel,
           customKeys: apiKeys,
-          forceDemoMode: isDemoMode
+          forceDemoMode: isDemoMode,
+          comparisonModel: analysis?.recommendation?.comparisonModel || null
         })
       });
 
-      setDispatchPhase('Aggregating coherent answer...');
       const result = await res.json();
       setExecutionResult(result);
       if (result.updatedQuotas) setQuotas(result.updatedQuotas);
@@ -224,10 +248,11 @@ export default function App() {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
         prompt: activePrompt,
-        modelUsed: selectedModel,
+        modelUsed: result.modelUsed || selectedModel,
         result: result.finalOutput,
         metrics: result.metrics,
-        providersUsed: result.providersUsed
+        providersUsed: result.providersUsed,
+        plainEnglishSummary: result.plainEnglishSummary
       };
       setSessionHistory((prev) => [historyItem, ...prev]);
 
@@ -265,10 +290,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#EDEDED] flex flex-col relative selection:bg-[#00F0FF] selection:text-black">
-      {/* Authentic Non-blocking Film Grain Overlay */}
+      {/* Authentic Film Grain Overlay */}
       <div className="grain-overlay" />
 
-      {/* 1. Header with Numbered Navigation, Gateways Monitor, and Pill CTA */}
+      {/* Header with Numbered Navigation, Pill CTA, and Quotas on Advanced mode */}
       <Header
         quotas={quotas}
         onResetQuotas={handleResetQuotas}
@@ -276,92 +301,62 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         isDemoMode={isDemoMode}
         onToggleDemoMode={() => setIsDemoMode(!isDemoMode)}
+        showAdvanced={showAdvanced}
+        onToggleAdvanced={handleToggleAdvanced}
       />
 
-      {/* 2. Hero Section */}
+      {/* Hero Section */}
       <HeroSection onScrollToWorkspace={handleScrollToWorkspace} />
 
-      {/* 3. Marquee Ticker Strip Divider 1 */}
+      {/* Marquee Strip Divider 1 */}
       <MarqueeStrip />
 
-      {/* 4. 4-Stage Architecture Steps (Terminal Windows) */}
+      {/* 4-Stage Architecture Steps */}
       <FeatureSteps />
 
-      {/* 5. Marquee Ticker Strip Divider 2 (Reversed direction) */}
+      {/* Marquee Strip Divider 2 (Reversed) */}
       <MarqueeStrip reverse={true} />
 
-      {/* 6. Core Interactive Workspace Section */}
-      <main id="workspace" className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-16 space-y-8 relative">
+      {/* Main Interactive Workspace */}
+      <main id="workspace" className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-16 space-y-8 relative">
         {/* Workspace Title & History Pill Button */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between pb-4 border-b border-white/10 gap-4">
           <div>
             <div className="flex items-center gap-2 font-mono text-xs text-[#00F0FF] uppercase tracking-widest mb-2">
               <span className="w-2 h-2 rounded-full bg-[#00F0FF] animate-ping" />
-              <span>01 // INTERACTIVE CONSOLE</span>
+              <span>01 // PROMPT OPTIMIZER</span>
               <span>✦</span>
-              <span>LIVE AI ROUTER</span>
+              <span>SIMPLIFIED ENGINE</span>
             </div>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-sans font-black tracking-tight uppercase text-white">
-              OPTIMIZATION & <span className="text-[#00F0FF]">DISPATCH WORKSPACE</span>
+              OPTIMIZE & <span className="text-[#00F0FF]">RUN</span>
             </h2>
           </div>
 
-          <button
-            onClick={() => setIsHistoryOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#141414] hover:bg-[#1E1E1E] text-slate-300 hover:text-[#00F0FF] rounded-full text-xs font-mono border border-white/10 hover:border-[#00F0FF]/40 transition duration-150 self-start sm:self-auto active:scale-95"
-          >
-            <History className="w-3.5 h-3.5 text-[#00F0FF]" />
-            <span>SESSION RUNS ({sessionHistory.length})</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsHistoryOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#141414] hover:bg-[#1E1E1E] text-slate-300 hover:text-[#00F0FF] rounded-full text-xs font-mono border border-white/10 hover:border-[#00F0FF]/40 transition duration-150 active:scale-95"
+            >
+              <History className="w-3.5 h-3.5 text-[#00F0FF]" />
+              <span>History ({sessionHistory.length})</span>
+            </button>
+          </div>
         </div>
 
-        {/* 1. Prompt Input with live tiktoken counter and preset selection */}
+        {/* 1. Prompt Input with 3-Way Plain Toggle (No Jargon in default view) */}
         <PromptInput
           prompt={prompt}
           onChangePrompt={setPrompt}
           tokenStats={tokenStats}
           onSelectPreset={handleSelectPreset}
           onClear={() => setPrompt('')}
+          qualityTier={qualityTier}
+          onChangeQualityTier={setQualityTier}
+          showAdvanced={showAdvanced}
         />
 
-        {/* 2. Intent Classifier & Complexity Meter & Divisibility */}
-        {analysis && (
-          <AnalysisPanel
-            classification={analysis.classification}
-            forceSplitOverride={forceSplitOverride}
-            onToggleSplitOverride={setForceSplitOverride}
-          />
-        )}
-
-        {/* 3. Model Recommendation Engine & Override Picker */}
-        {analysis?.recommendation && selectedModel && (
-          <ModelRecommender
-            recommendation={analysis.recommendation}
-            allModels={allModels}
-            selectedModel={selectedModel}
-            onSelectModel={setSelectedModel}
-          />
-        )}
-
-        {/* 4. Prompt Rewriter & Diff View */}
-        <PromptDiffView
-          rewriteData={rewriteData}
-          useOptimized={useOptimized}
-          onToggleUseOptimized={setUseOptimized}
-          isLoadingRewrite={isLoadingRewrite}
-        />
-
-        {/* 5. Oversized Split Banner */}
-        {splitData && (
-          <SplitBanner
-            splitData={splitData}
-            providerCount={quotas ? Object.keys(quotas).length : 2}
-            isSplitEnabled={isSplitEnabled}
-            onToggleSplit={setIsSplitEnabled}
-          />
-        )}
-
-        {/* 6. Execution / Dispatch Control with glowing pill button */}
+        {/* 2. Single "Optimize & Run" Button (Default View) */}
         <DispatchControl
           onDispatch={handleDispatch}
           isDispatching={isDispatching}
@@ -371,29 +366,100 @@ export default function App() {
           useOptimized={useOptimized}
           isSplitEnabled={isSplitEnabled}
           totalChunks={splitData?.totalChunks || 1}
+          showAdvanced={showAdvanced}
         />
 
-        {/* 7. Output Panel with Cost Saved vs Largest Model */}
+        {/* 3. Output Panel (Always shows one plain-English summary line + answer) */}
         {executionResult && (
-          <OutputPanel executionResult={executionResult} />
+          <OutputPanel
+            executionResult={executionResult}
+            showAdvanced={showAdvanced}
+          />
         )}
 
-        {/* 8. Candidate Models Cost Comparison Table (Top 3) */}
-        {analysis?.recommendation?.top3Candidates && (
-          <CostComparisonTable
-            top3Candidates={analysis.recommendation.top3Candidates}
-            selectedModel={selectedModel}
-            onSelectCandidate={setSelectedModel}
-          />
+        {/* 4. "Show Advanced" Pill Toggle Button */}
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={handleToggleAdvanced}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-mono text-xs transition-all duration-200 border ${
+              showAdvanced
+                ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/40 shadow-[0_0_20px_rgba(0,240,255,0.15)]'
+                : 'bg-[#141414] hover:bg-[#1A1A1A] text-slate-300 hover:text-white border-white/10 hover:border-white/20'
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[#00F0FF]" />
+            <span>
+              {showAdvanced
+                ? 'Hide Advanced Breakdown & Settings'
+                : 'Show Advanced (Model Picker, Token Diff, Cost Matrix)'}
+            </span>
+            {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {/* 5. ADVANCED PANELS (Hidden by default, revealed on Show Advanced) */}
+        {showAdvanced && (
+          <div className="space-y-6 pt-4 border-t border-white/10 animate-fadeIn">
+            <div className="flex items-center gap-2 text-xs font-mono text-slate-400 uppercase tracking-wider pb-2">
+              <span className="text-[#00F0FF] font-bold">&gt;&gt;</span>
+              <span>ADVANCED SYSTEM DIAGNOSTICS & MANUAL CONTROLS</span>
+            </div>
+
+            {/* A. Automated Intent Classifier & Complexity Meter */}
+            {analysis && (
+              <AnalysisPanel
+                classification={analysis.classification}
+                forceSplitOverride={forceSplitOverride}
+                onToggleSplitOverride={setForceSplitOverride}
+              />
+            )}
+
+            {/* B. Model Recommendation & Full Catalog Picker */}
+            {analysis?.recommendation && selectedModel && (
+              <ModelRecommender
+                recommendation={analysis.recommendation}
+                allModels={allModels}
+                selectedModel={selectedModel}
+                onSelectModel={setSelectedModel}
+              />
+            )}
+
+            {/* C. Token-Optimized Diff View */}
+            <PromptDiffView
+              rewriteData={rewriteData}
+              useOptimized={useOptimized}
+              onToggleUseOptimized={setUseOptimized}
+              isLoadingRewrite={isLoadingRewrite}
+            />
+
+            {/* D. Oversized Boundary Splitting Banner */}
+            {splitData && (
+              <SplitBanner
+                splitData={splitData}
+                providerCount={quotas ? Object.keys(quotas).length : 2}
+                isSplitEnabled={isSplitEnabled}
+                onToggleSplit={setIsSplitEnabled}
+              />
+            )}
+
+            {/* E. Candidate Models Cost Comparison Table */}
+            {analysis?.recommendation?.top3Candidates && (
+              <CostComparisonTable
+                top3Candidates={analysis.recommendation.top3Candidates}
+                selectedModel={selectedModel}
+                onSelectCandidate={setSelectedModel}
+              />
+            )}
+          </div>
         )}
       </main>
 
-      {/* 7. Knowledge Base / FAQ Accordion */}
+      {/* FAQ Accordion Section */}
       <FAQSection />
 
-      {/* 8. Footer with Scrolling Marquee Tagline & Monospace Links */}
+      {/* Footer with Marquee Tagline */}
       <footer className="border-t border-white/10 bg-[#080808] relative">
-        {/* Footer Marquee Tagline */}
         <div className="overflow-hidden border-b border-white/5 bg-[#0C0C0C] py-3">
           <div className="flex w-max animate-marquee whitespace-nowrap font-mono text-xs text-slate-400 font-semibold tracking-widest">
             {[1, 2, 3, 4].map((i) => (
@@ -402,16 +468,15 @@ export default function App() {
                 <span>—</span>
                 <span>ONE PROMPT. EVERY AI. OPTIMIZED FOR EVERY TOKEN.</span>
                 <span className="text-purple-400">✦</span>
-                <span>ZERO LATENCY OVERHEAD</span>
+                <span>FASTEST & CHEAPEST TO BEST QUALITY</span>
                 <span className="text-emerald-400">✦</span>
-                <span>FAILOVER READY</span>
+                <span>ZERO LATENCY</span>
                 <span className="text-[#00F0FF]">✱</span>
               </span>
             ))}
           </div>
         </div>
 
-        {/* Footer Bottom Bar */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
@@ -429,7 +494,7 @@ export default function App() {
 
           <div className="text-slate-500 text-[11px] flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>ALL SYSTEMS OPERATIONAL</span>
+            <span>ALL GATEWAYS ONLINE</span>
           </div>
         </div>
       </footer>
