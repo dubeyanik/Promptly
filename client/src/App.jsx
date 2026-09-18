@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Header from './components/Header';
+import HeroSection from './components/HeroSection';
+import MarqueeStrip from './components/MarqueeStrip';
+import FeatureSteps from './components/FeatureSteps';
+import FAQSection from './components/FAQSection';
 import PromptInput from './components/PromptInput';
 import AnalysisPanel from './components/AnalysisPanel';
 import ModelRecommender from './components/ModelRecommender';
@@ -12,7 +16,7 @@ import SessionHistory from './components/SessionHistory';
 import SettingsModal from './components/SettingsModal';
 import { countTokensClient } from './utils/tokenizer';
 import { SAMPLE_PRESETS } from './mockData';
-import { History, Zap, Shield, Sparkles } from 'lucide-react';
+import { History, Zap, Shield, Sparkles, Terminal, ArrowUpRight } from 'lucide-react';
 
 export default function App() {
   // 1. Core State
@@ -81,7 +85,11 @@ export default function App() {
 
   const handleResetQuotas = async () => {
     try {
-      const res = await fetch('/api/quotas/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const res = await fetch('/api/quotas/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      });
       const data = await res.json();
       setQuotas(data.quotas);
     } catch (err) {
@@ -148,7 +156,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             prompt: rewriteResult.rewrittenPrompt || prompt,
-            maxChunkTokens: 250, // optimal boundary size for demoing multi-chunk parallelization
+            maxChunkTokens: 250,
             intent: analyzeData.classification?.intent,
             isDivisible: analyzeData.classification?.isDivisible,
             forceSplit: forceSplitOverride
@@ -176,21 +184,23 @@ export default function App() {
       await new Promise((r) => setTimeout(r, 200));
       setDispatchPhase('Routing chunks across providers...');
 
-      // Determine prompt to execute
-      const activePrompt = (useOptimized && rewriteData?.rewrittenPrompt)
-        ? rewriteData.rewrittenPrompt
-        : prompt;
+      const activePrompt =
+        useOptimized && rewriteData?.rewrittenPrompt
+          ? rewriteData.rewrittenPrompt
+          : prompt;
 
-      // Determine chunks
-      const activeChunks = (isSplitEnabled && splitData?.shouldSplit && splitData?.chunks?.length > 1)
-        ? splitData.chunks
-        : [{
-            chunkIndex: 0,
-            totalChunks: 1,
-            tokens: tokenStats.tokens,
-            title: 'Single Chunk',
-            content: activePrompt
-          }];
+      const activeChunks =
+        isSplitEnabled && splitData?.shouldSplit && splitData?.chunks?.length > 1
+          ? splitData.chunks
+          : [
+              {
+                chunkIndex: 0,
+                totalChunks: 1,
+                tokens: tokenStats.tokens,
+                title: 'Single Chunk',
+                content: activePrompt
+              }
+            ];
 
       const res = await fetch('/api/dispatch', {
         method: 'POST',
@@ -249,9 +259,16 @@ export default function App() {
     localStorage.setItem('promptly_api_keys', JSON.stringify(keys));
   };
 
+  const handleScrollToWorkspace = () => {
+    document.getElementById('workspace')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
-    <div className="min-h-screen bg-dark-950 text-slate-100 flex flex-col">
-      {/* 1. App Header & Provider Quotas */}
+    <div className="min-h-screen bg-[#0A0A0A] text-[#EDEDED] flex flex-col relative selection:bg-[#00F0FF] selection:text-black">
+      {/* Authentic Non-blocking Film Grain Overlay */}
+      <div className="grain-overlay" />
+
+      {/* 1. Header with Numbered Navigation, Gateways Monitor, and Pill CTA */}
       <Header
         quotas={quotas}
         onResetQuotas={handleResetQuotas}
@@ -261,21 +278,40 @@ export default function App() {
         onToggleDemoMode={() => setIsDemoMode(!isDemoMode)}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6">
-        {/* Top Control Bar with Session History Trigger */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span>AI Prompt & Model Router Pipeline</span>
+      {/* 2. Hero Section */}
+      <HeroSection onScrollToWorkspace={handleScrollToWorkspace} />
+
+      {/* 3. Marquee Ticker Strip Divider 1 */}
+      <MarqueeStrip />
+
+      {/* 4. 4-Stage Architecture Steps (Terminal Windows) */}
+      <FeatureSteps />
+
+      {/* 5. Marquee Ticker Strip Divider 2 (Reversed direction) */}
+      <MarqueeStrip reverse={true} />
+
+      {/* 6. Core Interactive Workspace Section */}
+      <main id="workspace" className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-16 space-y-8 relative">
+        {/* Workspace Title & History Pill Button */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between pb-4 border-b border-white/10 gap-4">
+          <div>
+            <div className="flex items-center gap-2 font-mono text-xs text-[#00F0FF] uppercase tracking-widest mb-2">
+              <span className="w-2 h-2 rounded-full bg-[#00F0FF] animate-ping" />
+              <span>01 // INTERACTIVE CONSOLE</span>
+              <span>✦</span>
+              <span>LIVE AI ROUTER</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-sans font-black tracking-tight uppercase text-white">
+              OPTIMIZATION & <span className="text-[#00F0FF]">DISPATCH WORKSPACE</span>
+            </h2>
           </div>
 
           <button
             onClick={() => setIsHistoryOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-900 hover:bg-dark-850 text-slate-300 hover:text-cyan-400 rounded-lg text-xs border border-dark-750 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-[#141414] hover:bg-[#1E1E1E] text-slate-300 hover:text-[#00F0FF] rounded-full text-xs font-mono border border-white/10 hover:border-[#00F0FF]/40 transition duration-150 self-start sm:self-auto active:scale-95"
           >
-            <History className="w-3.5 h-3.5 text-cyan-400" />
-            <span>History ({sessionHistory.length})</span>
+            <History className="w-3.5 h-3.5 text-[#00F0FF]" />
+            <span>SESSION RUNS ({sessionHistory.length})</span>
           </button>
         </div>
 
@@ -315,7 +351,7 @@ export default function App() {
           isLoadingRewrite={isLoadingRewrite}
         />
 
-        {/* 5. Oversized Split Banner ("Split into N parts across M providers") */}
+        {/* 5. Oversized Split Banner */}
         {splitData && (
           <SplitBanner
             splitData={splitData}
@@ -325,7 +361,7 @@ export default function App() {
           />
         )}
 
-        {/* 6. Execution / Dispatch Control */}
+        {/* 6. Execution / Dispatch Control with glowing pill button */}
         <DispatchControl
           onDispatch={handleDispatch}
           isDispatching={isDispatching}
@@ -352,9 +388,50 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-dark-850 py-4 text-center text-xs text-slate-500 font-mono">
-        Promptly — One Prompt. Every AI. Optimized for Every Token.
+      {/* 7. Knowledge Base / FAQ Accordion */}
+      <FAQSection />
+
+      {/* 8. Footer with Scrolling Marquee Tagline & Monospace Links */}
+      <footer className="border-t border-white/10 bg-[#080808] relative">
+        {/* Footer Marquee Tagline */}
+        <div className="overflow-hidden border-b border-white/5 bg-[#0C0C0C] py-3">
+          <div className="flex w-max animate-marquee whitespace-nowrap font-mono text-xs text-slate-400 font-semibold tracking-widest">
+            {[1, 2, 3, 4].map((i) => (
+              <span key={i} className="mx-4 flex items-center gap-4">
+                <span className="text-[#00F0FF] text-glow-cyan">⚡ PROMPTLY</span>
+                <span>—</span>
+                <span>ONE PROMPT. EVERY AI. OPTIMIZED FOR EVERY TOKEN.</span>
+                <span className="text-purple-400">✦</span>
+                <span>ZERO LATENCY OVERHEAD</span>
+                <span className="text-emerald-400">✦</span>
+                <span>FAILOVER READY</span>
+                <span className="text-[#00F0FF]">✱</span>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer Bottom Bar */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
+            <span className="text-slate-300 font-bold tracking-tight">PROMPTLY v1.0</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-500">ENGINEERED FOR HACKATHON MVP</span>
+          </div>
+
+          <div className="flex items-center gap-6 text-slate-400">
+            <a href="#workspace" className="hover:text-[#00F0FF] transition">01 // APP</a>
+            <a href="#features" className="hover:text-[#00F0FF] transition">02 // PIPELINE</a>
+            <a href="#benchmarks" className="hover:text-[#00F0FF] transition">03 // MATRIX</a>
+            <a href="#faq" className="hover:text-[#00F0FF] transition">04 // FAQ</a>
+          </div>
+
+          <div className="text-slate-500 text-[11px] flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>ALL SYSTEMS OPERATIONAL</span>
+          </div>
+        </div>
       </footer>
 
       {/* Session History Sidebar Drawer */}
