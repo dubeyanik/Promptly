@@ -1,0 +1,110 @@
+[
+  {
+    "id": "microsoft/phi-4",
+    "name": "Phi-4 (14B)",
+    "provider": "openrouter",
+    "tier": "small",
+    "price_in": 0.07,
+    "price_out": 0.14,
+    "context_limit": 16384,
+    "free_quota": 100000,
+    "hf_model_id": "microsoft/phi-4",
+    "description": "High efficiency lightweight model for focused single-turn tasks and compact code."
+  },
+  {
+    "id": "google/gemma-4-9b",
+    "name": "Gemma 4 (9B)",
+    "provider": "openrouter",
+    "tier": "small",
+    "price_in": 0.06,
+    "price_out": 0.12,
+    "context_limit": 8192,
+    "free_quota": 100000,
+    "hf_model_id": "google/gemma-2-9b-it",
+    "description": "Ultra fast small model ideal for rapid classification and quick edits."
+  },
+  {
+    "id": "mistralai/mistral-small",
+    "name": "Mistral Small (24B)",
+    "provider": "openrouter",
+    "tier": "medium",
+    "price_in": 0.20,
+    "price_out": 0.60,
+    "context_limit": 32768,
+    "free_quota": 50000,
+    "hf_model_id": "mistralai/Mistral-Small-24B-Instruct-2501",
+    "description": "Versatile workhorse with excellent instruction following and cost balance."
+  },
+  {
+    "id": "meta-llama/llama-4-scout",
+    "name": "Llama 4 Scout (70B)",
+    "provider": "openrouter",
+    "tier": "medium",
+    "price_in": 0.18,
+    "price_out": 0.50,
+    "context_limit": 65536,
+    "free_quota": 50000,
+    "hf_model_id": "meta-llama/Meta-Llama-3.1-70B-Instruct",
+    "description": "Balanced powerhouse model for multi-step Q&A and coding problems."
+  },
+  {
+    "id": "qwen/qwen-3.7-235b",
+    "name": "Qwen 3.7 (235B)",
+    "provider": "openrouter",
+    "tier": "large",
+    "price_in": 0.40,
+    "price_out": 1.20,
+    "context_limit": 131072,
+    "free_quota": 25000,
+    "hf_model_id": "Qwen/Qwen2.5-72B-Instruct",
+    "description": "High-parameter model excelling at complex multilingual and deep code analysis."
+  },
+  {
+    "id": "zhipu/glm-5.1",
+    "name": "GLM 5.1",
+    "provider": "openrouter",
+    "tier": "large",
+    "price_in": 0.50,
+    "price_out": 1.50,
+    "context_limit": 128000,
+    "free_quota": 25000,
+    "hf_model_id": "THUDM/glm-4-9b-chat",
+    "description": "Broad domain knowledge, rich formatting, and rigorous logic flow."
+  },
+  {
+    "id": "deepseek/deepseek-v4",
+    "name": "DeepSeek V4",
+    "provider": "openrouter",
+    "tier": "frontier",
+    "price_in": 1.50,
+    "price_out": 3.50,
+    "context_limit": 131072,
+    "free_quota": 10000,
+    "hf_model_id": "deepseek-ai/DeepSeek-V3",
+    "description": "Top-tier frontier reasoning engine for mathematical proofs and complex synthesis."
+  },
+  {
+    "id": "zhipu/glm-5.2",
+    "name": "GLM 5.2 Frontier",
+    "provider": "openrouter",
+    "tier": "frontier",
+    "price_in": 1.80,
+    "price_out": 4.00,
+    "context_limit": 128000,
+    "free_quota": 10000,
+    "hf_model_id": "THUDM/glm-4-9b-chat",
+    "description": "Elite frontier system designed for advanced research and long-chain deduction."
+  },
+  {
+    "id": "moonshotai/kimi-k2.6",
+    "name": "Kimi K2.6",
+    "provider": "openrouter",
+    "tier": "frontier",
+    "price_in": 2.00,
+    "price_out": 4.50,
+    "context_limit": 200000,
+    "free_quota": 10000,
+    "hf_model_id": "moonshotai/Moonshot-v1",
+    "description": "Massive context window frontier champion for exhaustive document synthesis."
+  }
+]

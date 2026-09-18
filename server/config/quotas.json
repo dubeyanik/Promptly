@@ -1,0 +1,34 @@
+{
+  "openrouter": {
+    "provider_name": "OpenRouter",
+    "requests_limit": 500,
+    "tokens_limit": 1000000,
+    "requests_used": 142,
+    "tokens_used": 285400,
+    "reset_period_seconds": 3600
+  },
+  "huggingface": {
+    "provider_name": "Hugging Face Inference",
+    "requests_limit": 300,
+    "tokens_limit": 500000,
+    "requests_used": 45,
+    "tokens_used": 89000,
+    "reset_period_seconds": 3600
+  },
+  "groq": {
+    "provider_name": "Groq LPU",
+    "requests_limit": 600,
+    "tokens_limit": 800000,
+    "requests_used": 190,
+    "tokens_used": 312000,
+    "reset_period_seconds": 3600
+  },
+  "together": {
+    "provider_name": "Together AI",
+    "requests_limit": 400,
+    "tokens_limit": 600000,
+    "requests_used": 80,
+    "tokens_used": 140000,
+    "reset_period_seconds": 3600
+  }
+}

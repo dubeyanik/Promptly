@@ -1,0 +1,33 @@
+{
+  "name": "promptly",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Promptly - AI Prompt & Model Optimizer (Hackathon MVP)",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,magenta\" \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "diff": "^5.2.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "js-tiktoken": "^1.0.18"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "keywords": [
+    "prompt-optimizer",
+    "ai",
+    "model-router",
+    "token-savings",
+    "openrouter"
+  ],
+  "author": "",
+  "license": "MIT"
+}
